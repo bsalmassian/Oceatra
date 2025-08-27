@@ -453,7 +453,7 @@ root.title("Demo - OGS Oceanography Radiation Monitoring System")
 #root.geometry(f"{screen_width}x{screen_height}")
 
 top_frame = tk.Frame(root)
-logo_path = 'OGS_Logo.jpg'
+logo_path = '../OGS_Logo.jpg'
 
 logo_image = Image.open(logo_path).resize((200, 200), Image.Resampling.LANCZOS)
 logo_photo = ImageTk.PhotoImage(logo_image)
