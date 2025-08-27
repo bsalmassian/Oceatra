@@ -828,19 +828,11 @@ def export_kml2(dose_data, output_path, Coordination_accumulation, fit_results=N
         fidKML.write('</Document>\n')
         fidKML.write('</kml>\n')
      
-def find_simple_peaks(Dose_accumulation, anomali_coordination, anomali_energy, totaldose_accumulation_each_point,Coordination_accumulation):
+def find_simple_peaks(Dose_accumulation, Coordination_accumulation):
  
-
-
-
-
-    #peaks, properties = find_peaks(totaldose_accumulation_each_point, height=5)
-    # peaks, properties = anomali_energy , anomali_coordination
-    peak_coords = Coordination_accumulation
-    peaks = 609 * np.ones(len(peak_coords))
  #   append_to_console(f'{peak_coords}')
   #  peaks, properties = anomali_energy , anomali_coordination
-    return peaks, peak_coords
+    return 0
 
 
 
@@ -2019,7 +2011,6 @@ def GeneralApplication(peaks, properties):
         'Gold-198': [412],
         'Mercury-203': [279],
         'Cesium-136': [818],
-        'Cesium-138': [662],
         'Iodine-132': [667],
         'Iodine-133': [529],
         'Iodine-135': [1130],
