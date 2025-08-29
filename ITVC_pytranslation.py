@@ -33,6 +33,7 @@ from scipy.optimize import nnls
 import csv
 from scipy.stats import norm
 from sklearn.linear_model import Lasso
+from scipy.optimize import curve_fit
 
 
 
@@ -241,7 +242,57 @@ def simulate_nai_response(peaks_keV, counts, channels=1024, e_min=0, e_max=3000)
 
 
 
-def generate_library_nai( default_count=1000):
+def OceanGraphyApplication( default_count=1000):
+    radioactive_materials = {
+        'Cesium-137': [662],               # Common from nuclear fallout and ocean discharge
+        'Cobalt-60': [1170, 1330],           # From reactor leaks, medical/industrial waste
+        'Strontium-90': [546],             # Fission product, soluble in water
+        'Tritium-3': [18.6],               # From nuclear reactors, also used in fusion
+        'Iodine-131': [364],               # Short-lived but released in accidents
+        'Plutonium-239': [414],            # Fallout, nuclear weapons testing
+        'Plutonium-238': [43],            # Found near nuclear waste sites or accidents
+        'Uranium-238': [63],              # Natural and anthropogenic sources
+        'Uranium-235': [185],
+        'Radium-226': [186],               # Naturally occurring, also from industrial waste
+        'Radon-222': [352],                # Naturally decaying from radium in sediments
+        'Carbon-14': [156],                # Naturally occurring, also from nuclear tests
+        'Technetium-99m': [140],           # Medical waste discharge
+        'Beryllium-7': [478],              # Cosmogenic, deposited from atmosphere into oceans
+        'Americium-241': [59],            # Fallout, long-lived
+        'Manganese-54': [835],             # From reactors and fallout
+        'Zinc-65': [1115],                  # From nuclear and industrial discharges
+        'Barium-133': [356, 81],        # Fission product
+        'Lead-210': [46.5],                # Natural decay product, accumulates in sediments
+        'Polonium-210': [51],             # Found in marine organisms (bioaccumulation)
+        'Thorium-232': [63],              # Naturally occurring, particulate-bound in seawater
+        'Neptunium-239': [30],            # Short-lived, fallout-related
+        'Rubidium-86': [1078],              # Fission product
+        'Silver-110m': [657],              # From nuclear reactor coolant leakage
+        'Lanthanum-140': [1460],            # Fission product, high in fallout
+        'Cesium-134': [796],               # Shorter-lived isotope of Cs, from reactor leaks (e.g., Fukushima)
+        'Iodine-129': [39.6],              # Long-lived iodine isotope, traceable in ocean water from nuclear reprocessing
+        'Ruthenium-106': [512],            # Fission product, found in marine fallout
+        'Curium-244': [91],               # From nuclear waste; found in sediments near dump sites
+        'Curium-242': [160],               # Shorter-lived curium isotope in some nuclear releases
+        'Technetium-99': [140],            # Long-lived beta emitter, mobile in seawater, from reprocessing sites (Sellafield, La Hague)
+        'Antimony-125': [176],             # Found in nuclear waste discharge to sea
+        'Zirconium-95': [756],             # Fallout and reactor-related fission product
+        'Niobium-95': [765],               # Accompanies Zr-95, another fission product in marine fallout
+        'Chlorine-36' : [709],
+        'Bismuth-214' : [609],
+    }
+
+    library = {}
+    for name, peaks in radioactive_materials.items():
+        counts = [default_count] * len(peaks)
+        energies, spectrum = simulate_nai_response(peaks, counts)
+        library[name] = (energies, spectrum)
+    return library
+
+
+
+
+def GeneralApplication( default_count=1000):
     radioactive_materials = {
         'Cesium-137': [662],               # Common from nuclear fallout and ocean discharge
         'Cobalt-60': [1170, 1330],           # From reactor leaks, medical/industrial waste
@@ -357,6 +408,8 @@ def generate_library_nai( default_count=1000):
         'Rhenium-188': [155],
         'Lead-203': [279],
         'Bismuth-207': [570],
+
+
     }
 
     library = {}
@@ -365,6 +418,46 @@ def generate_library_nai( default_count=1000):
         energies, spectrum = simulate_nai_response(peaks, counts)
         library[name] = (energies, spectrum)
     return library
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -453,8 +546,7 @@ root.title("Demo - OGS Oceanography Radiation Monitoring System")
 #root.geometry(f"{screen_width}x{screen_height}")
 
 top_frame = tk.Frame(root)
-logo_path = '../OGS_Logo.jpg'
-
+logo_path = '/home/asus/OGS-Projects/FirstProject-LuraBassi/Radiation monitoring system/n42 file convertor/OGS-Logo.jpg'
 logo_image = Image.open(logo_path).resize((200, 200), Image.Resampling.LANCZOS)
 logo_photo = ImageTk.PhotoImage(logo_image)
 logo_label = tk.Label(top_frame, image=logo_photo)
@@ -484,17 +576,7 @@ fitting_frame_3 = ttk.LabelFrame(fitting_container, text="Select Background and 
 fitting_frame_3.grid(row=2, column=0, padx=5, pady=5, sticky="ew")
 
 
-
-
-
-
-
-
-
-
-
-
-fitting_methods = ["Oceangraphy", "general application"]
+fitting_methods = ["OceanGraphyApplication", "GeneralApplication"]
 selected_method_1 = tk.StringVar(value=fitting_methods[0])
 
 fitting_dropdown_1 = ttk.Combobox(
@@ -827,12 +909,101 @@ def export_kml2(dose_data, output_path, Coordination_accumulation, fit_results=N
 
         fidKML.write('</Document>\n')
         fidKML.write('</kml>\n')
+
      
 def find_simple_peaks(Dose_accumulation, Coordination_accumulation):
  
  #   append_to_console(f'{peak_coords}')
   #  peaks, properties = anomali_energy , anomali_coordination
     return 0
+
+
+
+
+
+
+
+
+# Define Gaussian function
+def gaussian(x, amp, mean, sigma):
+    return amp * np.exp(-0.5 * ((x - mean) / sigma) ** 2)
+
+# Define multi-Gaussian model
+def multi_gaussian(x, *params):
+    n = len(params) // 3
+    y = np.zeros_like(x)
+    for i in range(n):
+        amp = params[3*i]
+        mean = params[3*i + 1]
+        sigma = params[3*i + 2]
+        y += gaussian(x, amp, mean, sigma)
+    return y
+
+def find_simple_peaks(Dose_accumulation, Coordination_accumulation, selected_method_1):
+    # Generate library (assuming this function exists)
+    if selected_method_1 == "OceanGraphyApplication":
+        lib = OceanGraphyApplication()
+    else:
+        lib = GeneralApplication()
+
+    isotope_names = list(lib.keys())
+    fit_results = {iso: np.zeros(Dose_accumulation.shape[0]) for iso in isotope_names}
+
+    x = np.arange(Dose_accumulation.shape[1])  # channels
+
+    # Extract initial guesses for peak positions from library
+    init_means = [np.argmax(lib[name][1]) for name in isotope_names]
+    init_sigmas = [5.0] * len(isotope_names)  # arbitrary width guess
+    init_amps = [100.0] * len(isotope_names)  # arbitrary amplitude guess
+    p0 = []
+    for a, m, s in zip(init_amps, init_means, init_sigmas):
+        p0.extend([a, m, s])
+
+    # Fit each spectrum
+    for i in range(Dose_accumulation.shape[0]):
+        spectrum = Dose_accumulation[i]
+        try:
+            popt, _ = curve_fit(multi_gaussian, x, spectrum, p0=p0, maxfev=10000)
+            for j, iso in enumerate(isotope_names):
+                amp = popt[3*j]  # amplitude of isotope peak
+                fit_results[iso][i] = amp
+        except RuntimeError:
+            # If fit fails, keep zero
+            continue
+
+    # Save results
+    with open("fit_result.csv", "w", newline='') as f:
+        writer = csv.writer(f)
+        header = ["Spectrum Index"] + isotope_names + ["Coordination"]
+        writer.writerow(header)
+        num_spectra = Dose_accumulation.shape[0]
+        for i in range(num_spectra):
+            row = [i] + [fit_results[iso][i] for iso in isotope_names] + [Coordination_accumulation[i]]
+            writer.writerow(row)
+
+    return fit_results, Coordination_accumulation
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -864,9 +1035,17 @@ def find_peaks_Lasso(Dose_accumulation, Coordination_accumulation, alpha=0.001):
 
 
 
-def find_peaks_nnls(Dose_accumulation, Coordination_accumulation):
+def find_peaks_nnls(Dose_accumulation, Coordination_accumulation,selected_method_1):
     # Generate library (assuming this function exists)
-    lib = generate_library_nai()
+    
+    
+    if selected_method_1 == "OceanGraphyApplication":
+        lib = OceanGraphyApplication()
+    else:
+        lib = GeneralApplication()
+
+    
+    
     isotope_names = list(lib.keys())
 
     # Build matrix A with shape (1024, number_of_isotopes)
@@ -1823,7 +2002,7 @@ def calculate_dose(folder_path, Dose_accumulation, Coordination_accumulation,Fak
 
 
     if selected_method_2.get() == "simple peaks":
-        peaks, properties = find_simple_peaks(Dose_accumulation, anomali_coordination,anomali_energy,totaldose_accumulation_each_point,Coordination_accumulation)
+        fit_results, properties = find_simple_peaks(Dose_accumulation,Coordination_accumulation,selected_method_1.get())
      #   append_to_console(f'a: {selected_method_1.get()}, {selected_method_2.get()}, {selected_method_3.get()}')
 
     if selected_method_2.get() == "LASSO":
@@ -1831,7 +2010,7 @@ def calculate_dose(folder_path, Dose_accumulation, Coordination_accumulation,Fak
 
     #    append_to_console(f'a: {selected_method_1.get()}, {selected_method_2.get()}, {selected_method_3.get()}')
     if selected_method_2.get() == "NNLS":
-        fit_results, properties = find_peaks_nnls(Dose_accumulation,Coordination_accumulation)
+        fit_results, properties = find_peaks_nnls(Dose_accumulation,Coordination_accumulation,selected_method_1.get())
      #   append_to_console(f'a: {selected_method_1.get()}, {selected_method_2.get()}, {selected_method_3.get()}')
    
 
@@ -1859,6 +2038,7 @@ def calculate_dose(folder_path, Dose_accumulation, Coordination_accumulation,Fak
 
 
 
+<<<<<<< HEAD
 
 def OceanGraphyApplication(peaks, properties):
     radioactive_materials = {
@@ -2085,6 +2265,8 @@ def GeneralApplication(peaks, properties):
 
 
 
+=======
+>>>>>>> 92cdc05 (ddd)
 def open_range_calendar():
     range_cal = RangeCalendar(root)
 
@@ -2113,12 +2295,6 @@ time_button.grid(row=2, column=0, padx=5)
 fitting_frame_4 = ttk.LabelFrame(button_frame, text="Select siking energy channel")
 fitting_frame_4.grid(row=3, column=0, padx=10, pady=10, sticky="n")
 
-
-fitting_frame_5 = ttk.LabelFrame(button_frame, text="Calibration method")
-fitting_frame_5.grid(row=4, column=0, padx=10, pady=10, sticky="n")
-
-
-
 loc_methods = ["Bi_214 Energy Channel", "Cs_137 Energy Channel", "Be_7 Energy Channel"]
 selected_method_4 = tk.StringVar(value=loc_methods[0])
 
@@ -2135,35 +2311,6 @@ def confirm_selection_4():
     print(f"Selected method 4: {selected_method_4.get()}")
 
 ttk.Button(fitting_frame_4, text="Confirm Selection", command=confirm_selection_4).grid(pady=5)
-
-loc_methods = ["MARIS Library", "RS Library"]
-selected_method_5 = tk.StringVar(value=loc_methods[0])
-
-fitting_dropdown_5 = ttk.Combobox(
-    fitting_frame_5,
-    textvariable=selected_method_5,
-    values=loc_methods,
-    state="readonly",
-    width=30
-)
-fitting_dropdown_5.grid(padx=10, pady=5)
-
-def confirm_selection_5():
-    print(f"Selected method 5: {selected_method_5.get()}")
-
-ttk.Button(fitting_frame_5, text="Confirm Selection", command=confirm_selection_5).grid(pady=5)
-
-
-
-
-
-
-
-
-
-
-
-
 
 #help_button = tk.Button(top_frame, text="Help", command=show_help)
 #help_button.grid(row=2, column=1, padx=10, pady=10)
