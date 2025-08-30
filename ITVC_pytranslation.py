@@ -287,7 +287,9 @@ def OceanGraphyApplication( default_count=1000):
         counts = [default_count] * len(peaks)
         energies, spectrum = simulate_nai_response(peaks, counts)
         library[name] = (energies, spectrum)
-    return library
+
+
+    return library, radioactive_materials
 
 
 
@@ -417,7 +419,7 @@ def GeneralApplication( default_count=1000):
         counts = [default_count] * len(peaks)
         energies, spectrum = simulate_nai_response(peaks, counts)
         library[name] = (energies, spectrum)
-    return library
+    return library, radioactive_materials
 
 
 
@@ -911,11 +913,6 @@ def export_kml2(dose_data, output_path, Coordination_accumulation, fit_results=N
         fidKML.write('</kml>\n')
 
      
-def find_simple_peaks(Dose_accumulation, Coordination_accumulation):
- 
- #   append_to_console(f'{peak_coords}')
-  #  peaks, properties = anomali_energy , anomali_coordination
-    return 0
 
 
 
@@ -940,50 +937,72 @@ def multi_gaussian(x, *params):
     return y
 
 def find_simple_peaks(Dose_accumulation, Coordination_accumulation, selected_method_1):
-    # Generate library (assuming this function exists)
     if selected_method_1 == "OceanGraphyApplication":
-        lib = OceanGraphyApplication()
+        a , radioactive_materials = OceanGraphyApplication()
     else:
-        lib = GeneralApplication()
+        a, radioactive_materials = GeneralApplication()
 
-    isotope_names = list(lib.keys())
-    fit_results = {iso: np.zeros(Dose_accumulation.shape[0]) for iso in isotope_names}
+    peaks_accumulation = []
 
-    x = np.arange(Dose_accumulation.shape[1])  # channels
+    # Step 1: find peaks in each spectrum
+    for i in range(len(Dose_accumulation)):
+        spectrum = Dose_accumulation[i, :]       # shape (1024,)
 
-    # Extract initial guesses for peak positions from library
-    init_means = [np.argmax(lib[name][1]) for name in isotope_names]
-    init_sigmas = [5.0] * len(isotope_names)  # arbitrary width guess
-    init_amps = [100.0] * len(isotope_names)  # arbitrary amplitude guess
-    p0 = []
-    for a, m, s in zip(init_amps, init_means, init_sigmas):
-        p0.extend([a, m, s])
+        peaks, properties = find_peaks(spectrum, height=10)
+        peaks_accumulation.append((np.array(peaks).flatten(), properties))  # flatten to ensure 1D
 
-    # Fit each spectrum
-    for i in range(Dose_accumulation.shape[0]):
-        spectrum = Dose_accumulation[i]
-        try:
-            popt, _ = curve_fit(multi_gaussian, x, spectrum, p0=p0, maxfev=10000)
-            for j, iso in enumerate(isotope_names):
-                amp = popt[3*j]  # amplitude of isotope peak
-                fit_results[iso][i] = amp
-        except RuntimeError:
-            # If fit fails, keep zero
-            continue
+   # console_output2.insert(tk.END, "spectrum shape " + str(spectrum.shape) + "\n")
+  #  console_output2.insert(tk.END, "peaks_accumulation shape " + str(peaks_accumulation) + "\n")
 
-    # Save results
-    with open("fit_result.csv", "w", newline='') as f:
-        writer = csv.writer(f)
-        header = ["Spectrum Index"] + isotope_names + ["Coordination"]
-        writer.writerow(header)
-        num_spectra = Dose_accumulation.shape[0]
-        for i in range(num_spectra):
-            row = [i] + [fit_results[iso][i] for iso in isotope_names] + [Coordination_accumulation[i]]
-            writer.writerow(row)
+    #console_output2.insert(tk.END, "peaks shape " + str(peaks) + "\n")
+    #console_output2.insert(tk.END, "peaks shape " + str(lib) + "\n")
+
+    #console_output2.insert(tk.END, "lib shape " + str(lib.shape) + "\n")
+
+
+    all_peaks = []
+
+    for spectrum_id, (indices, props) in enumerate(peaks_accumulation):
+        for idx, height in zip(indices, props["peak_heights"]):
+            all_peaks.append((spectrum_id, idx, height))
+
+   # console_output2.insert(tk.END, "all peaks shape " + str(all_peaks) + "\n")
+    # (0,24,691.2) (0,48,350)...(1, 94, 234)....
+
+
+   # console_output2.insert(tk.END, "library " + str(radioactive_materials) + "\n" + "\n" + "\n" + "\n" + "\n")
+
+    all_libraries = []
+    for name, energies in radioactive_materials.items():
+        for energy in energies:
+            all_libraries.append((name, energy))
+
+
+   # console_output2.insert(tk.END, "library " + str(all_libraries) + "\n")
+
+
+    fit_results = []
+
+
+
+    variation = 2  # allowable difference
+
+    for peak in all_peaks:
+        peak_index = peak[0]        # first element of all_peaks
+        peak_seconds = 3 * peak[1]      # second element of all_peaks
+        peak_third = peak[2]        # third
+
+        for lib in all_libraries:
+            lib_name = lib[0]
+            lib_seconds = lib[1]    # second element of all_libraries
+            
+            if abs(peak_seconds - lib_seconds) < variation:
+                fit_results.append((peak_index, lib_name, peak_third))
+
+    console_output2.insert(tk.END, "simple " + str(fit_results) + "\n")
+    console_output2.insert(tk.END, "-------------------------------------------------\n")
 
     return fit_results, Coordination_accumulation
-
-
 
 
 
@@ -1010,21 +1029,34 @@ def find_simple_peaks(Dose_accumulation, Coordination_accumulation, selected_met
 
 
 def find_peaks_Lasso(Dose_accumulation, Coordination_accumulation, alpha=0.001):
-    lib = generate_library_nai()
+    if selected_method_1 == "OceanGraphyApplication":
+        lib = OceanGraphyApplication()
+    else:
+        lib = GeneralApplication()
+
+    peaks_accumulation = []
+
+    for i in range(Dose_accumulation.shape[0]):  # loop over 5054 spectra
+        spectrum = Dose_accumulation[i, :]       # one spectrum (1024 channels)
+        peaks, properties = find_peaks(spectrum, height=5)
+        peaks_accumulation.append((peaks, properties))
+
+
+    peak_coords = Coordination_accumulation
+    peaks = 609 * np.ones(len(peak_coords))
+ #   append_to_console(f'{peak_coords}')
+  #  peaks, properties = anomali_energy , anomali_coordination
+
+
+
     isotope_names = list(lib.keys())
 
-    A = np.column_stack([lib[name][1] for name in isotope_names])
-    fit_results = {iso: np.zeros(Dose_accumulation.shape[0]) for iso in isotope_names}
 
-    for i in range(Dose_accumulation.shape[0]):
-        spectrum = Dose_accumulation[i]
 
-        model = Lasso(alpha=alpha, positive=True, max_iter=10000)
-        model.fit(A, spectrum)
-        coeffs = model.coef_
 
-        for iso, coeff in zip(isotope_names, coeffs):
-            fit_results[iso][i] = coeff
+
+
+
 
     # CSV writing same as before...
     return fit_results, Coordination_accumulation
@@ -1040,12 +1072,11 @@ def find_peaks_nnls(Dose_accumulation, Coordination_accumulation,selected_method
     
     
     if selected_method_1 == "OceanGraphyApplication":
-        lib = OceanGraphyApplication()
+        lib, b = OceanGraphyApplication()
     else:
-        lib = GeneralApplication()
+        lib, b = GeneralApplication()
 
-    
-    
+     # Generate library (assuming this function exists)
     isotope_names = list(lib.keys())
 
     # Build matrix A with shape (1024, number_of_isotopes)
@@ -2037,236 +2068,6 @@ def calculate_dose(folder_path, Dose_accumulation, Coordination_accumulation,Fak
     return anomali_coordination
 
 
-
-<<<<<<< HEAD
-
-def OceanGraphyApplication(peaks, properties):
-    radioactive_materials = {
-        'Cesium-137': [662],               # Common from nuclear fallout and ocean discharge
-        'Cobalt-60': [1170, 1330],           # From reactor leaks, medical/industrial waste
-        'Strontium-90': [546],             # Fission product, soluble in water
-        'Tritium-3': [18.6],               # From nuclear reactors, also used in fusion
-        'Iodine-131': [364],               # Short-lived but released in accidents
-        'Plutonium-239': [414],            # Fallout, nuclear weapons testing
-        'Plutonium-238': [43],            # Found near nuclear waste sites or accidents
-        'Uranium-238': [63],              # Natural and anthropogenic sources
-        'Uranium-235': [185],
-        'Radium-226': [186],               # Naturally occurring, also from industrial waste
-        'Radon-222': [352],                # Naturally decaying from radium in sediments
-        'Carbon-14': [156],                # Naturally occurring, also from nuclear tests
-        'Technetium-99m': [140],           # Medical waste discharge
-        'Beryllium-7': [478],              # Cosmogenic, deposited from atmosphere into oceans
-        'Americium-241': [59],            # Fallout, long-lived
-        'Manganese-54': [835],             # From reactors and fallout
-        'Zinc-65': [1115],                  # From nuclear and industrial discharges
-        'Barium-133': [356, 81],        # Fission product
-        'Lead-210': [46.5],                # Natural decay product, accumulates in sediments
-        'Polonium-210': [51],             # Found in marine organisms (bioaccumulation)
-        'Thorium-232': [63],              # Naturally occurring, particulate-bound in seawater
-        'Neptunium-239': [30],            # Short-lived, fallout-related
-        'Rubidium-86': [1078],              # Fission product
-        'Silver-110m': [657],              # From nuclear reactor coolant leakage
-        'Lanthanum-140': [1460],            # Fission product, high in fallout
-        'Cesium-134': [796],               # Shorter-lived isotope of Cs, from reactor leaks (e.g., Fukushima)
-        'Iodine-129': [39.6],              # Long-lived iodine isotope, traceable in ocean water from nuclear reprocessing
-        'Ruthenium-106': [512],            # Fission product, found in marine fallout
-        'Curium-244': [91],               # From nuclear waste; found in sediments near dump sites
-        'Curium-242': [160],               # Shorter-lived curium isotope in some nuclear releases
-        'Technetium-99': [140],            # Long-lived beta emitter, mobile in seawater, from reprocessing sites (Sellafield, La Hague)
-        'Antimony-125': [176],             # Found in nuclear waste discharge to sea
-        'Zirconium-95': [756],             # Fallout and reactor-related fission product
-        'Niobium-95': [765],               # Accompanies Zr-95, another fission product in marine fallout
-        'Chlorine-36' : [709],
-        'Bismuth-214' : [609],
-    }
-
-    Detected_radionuclide_list = []
-    Detected_radionuclide_list_index = []
-    Detected_radionuclide_list1 = []
-    radioactive_materials_index =[]
-
-
-    properties_len = len(properties)
-
-
-    for i in range(properties_len):
-        for isotope, energies in radioactive_materials.items():
-            for energy in energies:
-                if abs(peaks[i] - energy) < 5:
-                    Detected_radionuclide_list_index.append(i)
-                    radioactive_materials_index.append(isotope)
-
-
-                    
-    append_to_console(f'IIIIIIIIIIIIIIIIIIII{len(Detected_radionuclide_list_index)}')
-
-    for k in range(len(Detected_radionuclide_list_index)):
-        Detected_radionuclide_list.append((radioactive_materials_index[k],peaks[Detected_radionuclide_list_index[k]],properties[Detected_radionuclide_list_index[k]]))
-
-    
-    append_to_console('yes')
-
-    return(Detected_radionuclide_list)
-
-
-
-
-
-
-
-def GeneralApplication(peaks, properties):
-    radioactive_materials = {
-        'Cesium-137': [662],               # Common from nuclear fallout and ocean discharge
-        'Cobalt-60': [1170, 1330],           # From reactor leaks, medical/industrial waste
-        'Strontium-90': [546],             # Fission product, soluble in water
-        'Tritium-3': [18.6],               # From nuclear reactors, also used in fusion
-        'Iodine-131': [364],               # Short-lived but released in accidents
-        'Plutonium-239': [414],            # Fallout, nuclear weapons testing
-        'Plutonium-238': [43],            # Found near nuclear waste sites or accidents
-        'Uranium-238': [63],              # Natural and anthropogenic sources
-        'Uranium-235': [185],
-        'Radium-226': [186],               # Naturally occurring, also from industrial waste
-        'Radon-222': [352],                # Naturally decaying from radium in sediments
-        'Carbon-14': [156],                # Naturally occurring, also from nuclear tests
-        'Technetium-99m': [140],           # Medical waste discharge
-        'Beryllium-7': [478],              # Cosmogenic, deposited from atmosphere into oceans
-        'Americium-241': [59],            # Fallout, long-lived
-        'Manganese-54': [835],             # From reactors and fallout
-        'Zinc-65': [1115],                  # From nuclear and industrial discharges
-        'Barium-133': [356, 81],        # Fission product
-        'Lead-210': [46.5],                # Natural decay product, accumulates in sediments
-        'Polonium-210': [51],             # Found in marine organisms (bioaccumulation)
-        'Thorium-232': [63],              # Naturally occurring, particulate-bound in seawater
-        'Neptunium-239': [30],            # Short-lived, fallout-related
-        'Rubidium-86': [1078],              # Fission product
-        'Silver-110m': [657],              # From nuclear reactor coolant leakage
-        'Lanthanum-140': [1460],            # Fission product, high in fallout
-        'Cesium-134': [796],               # Shorter-lived isotope of Cs, from reactor leaks (e.g., Fukushima)
-        'Iodine-129': [39.6],              # Long-lived iodine isotope, traceable in ocean water from nuclear reprocessing
-        'Ruthenium-106': [512],            # Fission product, found in marine fallout
-        'Curium-244': [91],               # From nuclear waste; found in sediments near dump sites
-        'Curium-242': [160],               # Shorter-lived curium isotope in some nuclear releases
-        'Technetium-99': [140],            # Long-lived beta emitter, mobile in seawater, from reprocessing sites (Sellafield, La Hague)
-        'Antimony-125': [176],             # Found in nuclear waste discharge to sea
-        'Zirconium-95': [756],             # Fallout and reactor-related fission product
-        'Niobium-95': [765],               # Accompanies Zr-95, another fission product in marine fallout
-        'Chlorine-36' : [709],
-        'Europium-152': [122, 244, 344],
-        'Europium-154': [123, 247, 723],
-        'Promethium-147': [122],
-        'Tellurium-132': [228],
-        'Cerium-144': [133],
-        'Yttrium-90': [2.3],
-        'Yttrium-91': [1554],
-        'Neptunium-237': [312],
-        'Thorium-228': [69, 238],
-        'Thorium-230': [67],
-        'Actinium-227': [75],
-        'Protactinium-231': [312],
-        'Francium-223': [81],
-        'Bismuth-212': [727],
-        'Bismuth-214': [609, 1120, 1764],
-        'Lead-212': [238],
-        'Lead-214': [352, 609],
-        'Thallium-208': [583, 2615],
-        'Krypton-85': [514],
-        'Argon-41': [1293],
-        'Scandium-46': [889, 1121],
-        'Scandium-48': [1038, 1312],
-        'Iron-59': [1099, 1292],
-        'Cobalt-58': [810, 863],
-        'Nickel-63': [67],
-        'Nickel-59': [26],
-        'Molybdenum-99': [739, 181],
-        'Rhodium-105': [319],
-        'Cadmium-109': [88],
-        'Indium-111': [171, 245],
-        'Tin-123': [159],
-        'Samarium-151': [22],
-        'Gadolinium-153': [103, 45],
-        'Terbium-160': [879],
-        'Hafnium-181': [133, 482],
-        'Tantalum-182': [112, 1122],
-        'Iridium-192': [316, 468],
-        'Gold-198': [412],
-        'Mercury-203': [279],
-        'Cesium-136': [818],
-        'Iodine-132': [667],
-        'Iodine-133': [529],
-        'Iodine-135': [1130],
-        'Tellurium-127m': [88],
-        'Tellurium-129m': [105],
-        'Tellurium-134': [846],
-        'Xenon-133': [81],
-        'Xenon-135': [249],
-        'Xenon-137': [455],
-        'Xenon-140': [537],
-        'Rubidium-87': [275],
-        'Rubidium-82': [776],
-        'Bromine-82': [554],
-        'Selenium-75': [136, 265],
-        'Krypton-87': [511],
-        'Krypton-88': [944],
-        'Yttrium-92': [1017],
-        'Zirconium-93': [67],
-        'Ruthenium-103': [497],
-        'Ruthenium-105': [318],
-        'Rhodium-106': [511],
-        'Palladium-107': [187],
-        'Tin-121m': [240],
-        'Tin-126': [415],
-        'Tellurium-121m': [144],
-        'Barium-140': [537],
-        'Barium-141': [170],
-        'Lanthanum-138': [1436],
-        'Neodymium-147': [91],
-        'Dysprosium-165': [94],
-        'Erbium-169': [110],
-        'Thulium-170': [84],
-        'Ytterbium-175': [396],
-        'Osmium-191': [129],
-        'Rhenium-186': [137],
-        'Rhenium-188': [155],
-        'Lead-203': [279],
-        'Bismuth-207': [570],
-
-
-    }
-
-    Detected_radionuclide_list = []
-    Detected_radionuclide_list_index = []
-    Detected_radionuclide_list1 = []
-    radioactive_materials_index =[]
-
-
-    properties_len = len(properties)
-
-
-    for i in range(properties_len):
-        for isotope, energies in radioactive_materials.items():
-            for energy in energies:
-                if abs(peaks[i] - energy) < 5:
-                    Detected_radionuclide_list_index.append(i)
-                    radioactive_materials_index.append(isotope)
-
-
-                    
-    append_to_console(f'IIIIIIIIIIIIIIIIIIII{len(Detected_radionuclide_list_index)}')
-
-    for k in range(len(Detected_radionuclide_list_index)):
-        Detected_radionuclide_list.append((radioactive_materials_index[k],peaks[Detected_radionuclide_list_index[k]],properties[Detected_radionuclide_list_index[k]]))
-
-    
-    append_to_console('yes')
-
-    return(Detected_radionuclide_list)
-
-
-
-
-
-=======
->>>>>>> 92cdc05 (ddd)
 def open_range_calendar():
     range_cal = RangeCalendar(root)
 
